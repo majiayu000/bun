@@ -1,0 +1,84 @@
+name: Custom Test Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_file:
+        description: 'Test file to run (e.g., test/js/bun/s3/s3-list-objects.test.ts)'
+        required: true
+        default: 'test/js/bun/s3/s3-list-objects.test.ts'
+      test_filter:
+        description: 'Test filter (optional, -t flag)'
+        required: false
+        default: ''
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run test
+        run: |
+          if [ -n "${{ github.event.inputs.test_filter }}" ]; then
+            bun test ${{ github.event.inputs.test_file }} -t "${{ github.event.inputs.test_filter }}"
+          else
+            bun test ${{ github.event.inputs.test_file }}
+          fi
+        env:
+          CI: true
+
+  test-with-build:
+    name: Run Tests with Debug Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            libclang-dev \
+            lld \
+            llvm \
+            clang
+
+      - name: Build debug version
+        run: |
+          bun install
+          bun run build:debug
+        timeout-minutes: 90
+
+      - name: Run test with debug build
+        run: |
+          if [ -n "${{ github.event.inputs.test_filter }}" ]; then
+            ./build/debug/bun-debug test ${{ github.event.inputs.test_file }} -t "${{ github.event.inputs.test_filter }}"
+          else
+            ./build/debug/bun-debug test ${{ github.event.inputs.test_file }}
+          fi
+        env:
+          CI: true
